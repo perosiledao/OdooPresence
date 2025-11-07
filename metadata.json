@@ -1,0 +1,8 @@
+{
+  "name": "ODOO presence applet",
+  "description": "Applet que te permite fichar con tu usuario y pin en tu instancia de ODOO",
+  "uuid": "com.kn9491.OdooPresence",
+  "shell-version": [
+    "49"
+  ]
+}
