@@ -26,7 +26,7 @@ This extension is built using modern **ESM (ECMAScript Modules)** standards.
 | :--- | :---: | :--- |
 | **49** | ✅ | **Tested & Supported** |
 | **48** | ✅ | **Tested & Supported** |
-| **45 - 47** | ⚠️ | *Untested* (Should work, but not verified) |
+| **46 - 47** | ⚠️ | *Untested* (Should work, but not verified) |
 | **< 45** | ❌ | Not supported (Legacy imports) |
 
 **Note:** Requires `libadwaita` and `gtk4` installed on your system for the Preferences window.
