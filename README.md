@@ -1,4 +1,4 @@
-![GNOME Shell 48+](https://img.shields.io/badge/GNOME%20Shell-48%2B-blue?style=flat-square&logo=gnome)
+![GNOME Shell 46+](https://img.shields.io/badge/GNOME%20Shell-46%2B-blue?style=flat-square&logo=gnome)
 ![License GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-green?style=flat-square)
 
 # Odoo Presence Monitor for GNOME Shell
