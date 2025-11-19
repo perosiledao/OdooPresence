@@ -1,0 +1,52 @@
+/* Contenedor principal de la tarjeta */
+.odoo-card-box {
+    padding: 12px;
+    spacing: 6px;
+    min-width: 220px;
+}
+
+/* Avatar */
+.odoo-avatar {
+    margin-bottom: 8px;
+}
+
+/* Nombre del empleado */
+.odoo-name-label {
+    font-weight: 800; /* Extra bold */
+    font-size: 1.1em;
+    text-align: center;
+    padding-bottom: 4px;
+}
+
+/* Separador (ajuste sutil) */
+.odoo-separator {
+    margin: 6px 0;
+}
+
+/* Temporizador */
+.odoo-timer-label {
+    font-family: "Ubuntu Mono", "JetBrains Mono", monospace;
+    font-size: 1.5em;
+    text-align: center;
+    font-feature-settings: "tnum"; /* Tabular numbers para que no "bailen" los números */
+}
+
+/* Texto de estado (última conexión) */
+.odoo-status-label {
+    font-size: 0.85em;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.7); /* Color base para tema oscuro por defecto */
+}
+
+/* --- COLORES DE ESTADO --- */
+
+/* Entrada (Verde) */
+.odoo-status-in {
+    color: #2ecc71;
+    text-shadow: 0 0 2px rgba(46, 204, 113, 0.3); /* Pequeño brillo */
+}
+
+/* Salida (Rojo/Naranja) */
+.odoo-status-out {
+    color: #e74c3c;
+}

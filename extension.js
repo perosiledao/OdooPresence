@@ -1,238 +1,395 @@
-// Imprescindible para definir una extensión
-import {Extension} from 'resource:///org/gnome/shell/extensions/main.js';
+/*
+ * Odoo Presence Monitor
+ *
+ * Copyright (C) 2025 Marcos Garcia
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
 
-// Librerías para la Interfaz de Usuario (UI)
+import { Extension, gettext as _ } from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
-import * as GObject from 'gi://GObject';
-import * as St from 'gi://St';
+import GObject from 'gi://GObject';
+import St from 'gi://St';
+import Clutter from 'gi://Clutter';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
+import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
+import Soup from 'gi://Soup';
+import GLib from 'gi://GLib';
+import Gio from 'gi://Gio';
 
-// Librerías para la petición de red (HTTP)
-import * as Soup from 'gi://Soup?version=3.0';
-import * as GLib from 'gi://GLib';
+const ICON_LOADING = 'network-transmit-receive-symbolic';
+const ICON_CHECKED_IN = 'avatar-default-symbolic';
+const ICON_CHECKED_OUT = 'system-log-out-symbolic';
 
-// --- CONFIGURACIÓN ---
-// ¡¡CAMBIA ESTOS VALORES POR LOS TUYOS!!
-const YOUR_EMPLOYEE_ID = 1;       // Reemplaza con tu ID de empleado
-const YOUR_PIN = '1234';          // Reemplaza con tu PIN
-const ODOO_TOKEN = 'fd6a2868-c5ee-4faf-9fca-6581dfa7662b';
-const ODOO_URL = 'https://worldsatnet.odoo.com/en/hr_attendance/' + ODOO_TOKEN;
-
-// Iconos que usaremos (son nombres de iconos estándar de GNOME)
-const ICON_CHECKED_IN = 'presence-available-symbolic'; // Un círculo verde/disponible
-const ICON_CHECKED_OUT = 'presence-offline-symbolic'; // Un círculo rojo/desconectado
-
-// Creamos un nuevo "botón" para la barra de tareas
+/**
+ * Main indicator button class located in the top panel.
+ * Handles the UI rendering, networking state, and user interaction.
+ */
 const OdooIndicator = GObject.registerClass(
 class OdooIndicator extends PanelMenu.Button {
-    _init() {
-        super._init(0.0, 'Odoo Fichador', false);
+    
+    /**
+     * @param {Gio.Settings} settings - The extension settings instance injected from the main class.
+     */
+    _init(settings) {
+        super._init(0.0, _('Odoo Status'));
 
-        // 1. Creamos el icono
+        // Store settings reference locally to avoid schema path resolution issues
+        this._settings = settings;
+
+        this._httpSession = new Soup.Session();
+        this._timerId = null;
+        this._liveTimerId = null;
+        
+        // Configuration state
+        this._baseUrl = '';
+        this._token = '';
+        this._pin = '';
+        
+        this._employeeData = {
+            name: _('Loading...'),
+            hoursToday: 0.0,
+            lastCheckIn: null
+        };
+
+        // Initialize Status Icon
         this._icon = new St.Icon({
-            icon_name: ICON_CHECKED_OUT, // Empezamos en rojo (se corregirá al instante)
+            icon_name: ICON_CHECKED_OUT,
             style_class: 'system-status-icon',
         });
-        
         this.add_child(this._icon);
 
-        // 2. Conectamos la señal de "clic" a nuestra función de FICHAR
-        this.connect('button-press-event', () => this._checkInOrOut());
+        // Build the popup menu
+        this._buildMenuCard();
+
+        // Input Handling
+        this.connect('event', (actor, event) => {
+            if (event.type() === Clutter.EventType.BUTTON_PRESS) {
+                const button = event.get_button();
+                if (button === 1) {
+                    // Left Click: Toggle Status
+                    this._toggleAttendance();
+                    return Clutter.EVENT_STOP;
+                } else if (button === 3) {
+                    // Right Click: Open Menu
+                    this.menu.toggle();
+                    return Clutter.EVENT_STOP;
+                }
+            }
+            return Clutter.EVENT_PROPAGATE;
+        });
+
+        // Listen for configuration changes to reload connection details
+        this._settingsChangedId = this._settings.connect('changed', () => this._loadConfigAndStart());
         
-        // Preparamos la sesión de red
-        this._httpSession = Soup.Session.new();
-
-        // --- NUEVO ---
-        // 3. Al iniciar, comprobamos el estado actual
-        this._fetchInitialState();
+        // Start polling
+        this._loadConfigAndStart();
     }
 
-    // --- NUEVA FUNCIÓN ---
-    // Petición para saber el estado INICIAL al cargar la extensión
-    _fetchInitialState() {
-        // Preparamos los datos de la petición (la que nos diste)
-        const params = {
-            token: ODOO_TOKEN,
-            limit: 24,
-            offset: 0,
-            domain: [],
-        };
+    /**
+     * Constructs the popup menu layout (Employee Card).
+     */
+    _buildMenuCard() {
+        this._cardBox = new St.BoxLayout({
+            vertical: true,
+            style_class: 'odoo-card-box' 
+        });
 
-        const payload = {
-            id: Math.floor(Math.random() * 10000), // ID aleatorio
-            jsonrpc: '2.0',
-            method: 'call',
-            params: params,
-        };
+        this._avatarIcon = new St.Icon({
+            icon_name: 'avatar-default-symbolic',
+            icon_size: 64,
+            x_align: Clutter.ActorAlign.CENTER,
+            style_class: 'odoo-avatar'
+        });
+        this._cardBox.add_child(this._avatarIcon);
 
-        // Creamos el mensaje HTTP
-        const message = Soup.Message.new_request(
-            'POST',
-            GLib.Uri.parse(ODOO_URL, GLib.UriFlags.NONE)
-        );
+        this._nameLabel = new St.Label({
+            text: _('Loading...'),
+            x_align: Clutter.ActorAlign.CENTER,
+            style_class: 'odoo-name-label'
+        });
+        this._cardBox.add_child(this._nameLabel);
 
-        const jsonPayload = JSON.stringify(payload);
-        const bytes = GLib.Bytes.new(jsonPayload, jsonPayload.length);
+        this._cardBox.add_child(new PopupMenu.PopupSeparatorMenuItem());
 
-        message.set_request_body_from_bytes(bytes);
-        message.get_request_headers().append('Content-Type', 'application/json');
+        this._timerLabel = new St.Label({
+            text: '--:--:--',
+            x_align: Clutter.ActorAlign.CENTER,
+            style_class: 'odoo-timer-label'
+        });
+        this._cardBox.add_child(this._timerLabel);
 
-        console.log('OdooApplet: Enviando petición de estado inicial...');
+        this._lastActionLabel = new St.Label({
+            text: _('Waiting for connection...'),
+            x_align: Clutter.ActorAlign.CENTER,
+            style_class: 'odoo-status-label'
+        });
+        this._cardBox.add_child(this._lastActionLabel);
 
-        // 4. Enviamos la petición de forma asíncrona
-        this._httpSession.send_and_read_async(
-            message,
-            GLib.PRIORITY_DEFAULT,
-            null, // CancellationToken
-            (session, result) => {
-                // Esta es la función "callback", se ejecuta cuando Odoo responde
-                try {
-                    if (message.get_status() === Soup.Status.OK) {
-                        const responseBytes = session.send_and_read_finish(result);
-                        this._handleInitialStateResponse(responseBytes); // Llamamos al NUEVO manejador
-                    } else {
-                        console.error('OdooApplet: Error HTTP (estado inicial): ' + message.get_status());
-                        this._updateIcon('error');
-                    }
-                } catch (e) {
-                    console.error('OdooApplet: Error al procesar respuesta inicial: ' + e);
-                    this._updateIcon('error');
-                }
-            }
-        );
+        const item = new PopupMenu.PopupBaseMenuItem({ reactive: false, can_focus: false });
+        item.actor.add_child(this._cardBox);
+        this.menu.addMenuItem(item);
     }
-    
-    // --- NUEVA FUNCIÓN ---
-    // Procesamos la respuesta INICIAL
-    _handleInitialStateResponse(responseBytes) {
-        const responseText = new TextDecoder().decode(responseBytes.get_data());
-        const responseJson = JSON.parse(responseText);
 
-        if (responseJson.result && responseJson.result.records) {
-            const records = responseJson.result.records;
-            
-            // Buscamos nuestro empleado en la lista de resultados
-            const myRecord = records.find(record => record.id === YOUR_EMPLOYEE_ID);
+    /**
+     * loads settings from Gio.Settings and initializes the network polling timer.
+     */
+    _loadConfigAndStart() {
+        const kioskUrl = this._settings.get_string('kiosk-url');
+        this._employeeId = this._settings.get_int('employee-id');
+        this._updateFreq = this._settings.get_int('update-frequency');
+        this._pin = this._settings.get_string('employee-pin');
 
-            if (myRecord) {
-                // Usamos el campo "status" que nos da esta respuesta
-                const status = myRecord.status; 
-                console.log('OdooApplet: Estado inicial obtenido: ' + status);
-                this._updateIcon(status); // 'checked_in' o 'checked_out'
+        try {
+            if (kioskUrl.includes('/hr_attendance/')) {
+                const parts = kioskUrl.split('/hr_attendance/');
+                // Sanitize URL: remove trailing slashes and locale paths
+                this._baseUrl = parts[0].replace(/\/$/, "").replace('/en', ''); 
+                this._token = parts[1];
             } else {
-                console.error(`OdooApplet: No se encontró el empleado con ID ${YOUR_EMPLOYEE_ID} en la respuesta inicial.`);
-                this._updateIcon('error');
+                throw new Error("Invalid Kiosk URL format");
             }
-        } else if (responseJson.error) {
-            console.error('OdooApplet: Error de Odoo (estado inicial): ' + responseJson.error.message);
-            this._updateIcon('error');
+        } catch (e) {
+            this._icon.icon_name = 'dialog-error-symbolic';
+            return;
         }
+
+        // Reset network timer
+        if (this._timerId) {
+            GLib.source_remove(this._timerId);
+            this._timerId = null;
+        }
+        
+        if (this._updateFreq > 0) {
+            this._timerId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, this._updateFreq, () => {
+                this._checkStatus();
+                return GLib.SOURCE_CONTINUE;
+            });
+        }
+        
+        // Perform immediate check
+        this._checkStatus();
     }
 
-
-    // -------------------------------------------------------------------
-    // --- LÓGICA DE CLIC (FICHAR/SALIR) - ESTO NO CAMBIA ---
-    // -------------------------------------------------------------------
-
-    // Esta función se llama al hacer CLIC (usa el PIN)
-    _checkInOrOut() {
-        // Preparamos los datos de la petición (tu JSON)
-        const params = {
-            token: ODOO_TOKEN,
-            employee_id: YOUR_EMPLOYEE_ID,
-            pin_code: YOUR_PIN,
-            latitude: 28.1083904,
-            longitude: -15.4402816,
+    /**
+     * Executes a check-in or check-out request against the Odoo API.
+     */
+    async _toggleAttendance() {
+        if (!this._baseUrl || this._employeeId === 0) return;
+        
+        // Set loading state
+        this._icon.icon_name = ICON_LOADING;
+        
+        const url = `${this._baseUrl}/hr_attendance/manual_selection`;
+        const body = {
+            "id": 6, "jsonrpc": "2.0", "method": "call",
+            "params": { "token": this._token, "employee_id": this._employeeId, "pin_code": this._pin }
         };
+        
+        this._sendRequest(url, body, (json) => {
+            if (json.result) {
+                this._updateCardData(json.result);
+                
+                // Handle desktop notifications based on response state
+                const state = json.result.attendance_state; 
+                const fullName = json.result.employee_name || "User";
+                const firstName = fullName.split(' ')[0]; 
+                
+                if (state === 'checked_in') {
+                    const greeting = this._getGreeting(); 
+                    const checkInTime = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                    
+                    this._sendNotification(
+                        `${greeting} ${firstName}`,
+                        _('✅ Check-in registered at %s.\nHave a nice day!').replace('%s', checkInTime)
+                    );
+                } else {
+                    const hours = this._formatHours(json.result.hours_today);
+                    const hoursVal = json.result.hours_today;
+                    let extraMsg = "";
 
-        const payload = {
-            id: Math.floor(Math.random() * 10000), 
-            jsonrpc: '2.0',
-            method: 'call',
-            params: params,
-        };
+                    if (hoursVal > 8) extraMsg = _("Great effort today! 🚀");
+                    else if (hoursVal < 4) extraMsg = _("Short shift? 👌");
+                    else extraMsg = _("Good job. 👏");
 
-        const message = Soup.Message.new_request(
-            'POST',
-            GLib.Uri.parse(ODOO_URL, GLib.UriFlags.NONE)
-        );
-
-        const jsonPayload = JSON.stringify(payload);
-        const bytes = GLib.Bytes.new(jsonPayload, jsonPayload.length);
-
-        message.set_request_body_from_bytes(bytes);
-        message.get_request_headers().append('Content-Type', 'application/json');
-
-        console.log('OdooApplet: Enviando a Odoo (clic)...');
-
-        this._httpSession.send_and_read_async(
-            message,
-            GLib.PRIORITY_DEFAULT,
-            null,
-            (session, result) => {
-                try {
-                    if (message.get_status() === Soup.Status.OK) {
-                        const responseBytes = session.send_and_read_finish(result);
-                        this._handleCheckInOutResponse(responseBytes); // Manejador de la respuesta de CLIC
-                    } else {
-                        console.error('OdooApplet: Error HTTP (clic): ' + message.get_status());
-                        this._updateIcon('error');
-                    }
-                } catch (e) {
-                    console.error('OdooApplet: Error al procesar la respuesta de Odoo (clic): ' + e);
-                    this._updateIcon('error');
+                    this._sendNotification(
+                        _('🏠 See you soon, %s').replace('%s', firstName),
+                        _('You have worked a total of %s today.\n%s').replace('%s', hours).replace('%s', extraMsg)
+                    );
                 }
             }
-        );
+        });
     }
 
-    // Procesamos la respuesta del CLIC
-    _handleCheckInOutResponse(responseBytes) {
-        const responseText = new TextDecoder().decode(responseBytes.get_data());
-        const responseJson = JSON.parse(responseText);
+    /**
+     * Returns a localized greeting string based on current hour.
+     */
+    _getGreeting() {
+        const hour = new Date().getHours();
+        if (hour >= 5 && hour < 12) return _("☀️ Good morning,");
+        if (hour >= 12 && hour < 20) return _("👋 Good afternoon,");
+        return _("🌙 Good evening,");
+    }
 
-        if (responseJson.result) {
-            // Usamos el campo "attendance_state" que da esta respuesta
-            const state = responseJson.result.attendance_state;
-            console.log('OdooApplet: Respuesta de Odoo (clic): ' + state);
-            this._updateIcon(state);
-        } else if (responseJson.error) {
-            console.error('OdooApplet: Error de Odoo (clic): ' + responseJson.error.message);
-            this._updateIcon('error');
+    _sendNotification(title, body) {
+        Main.notify(title, body);
+    }
+
+    /**
+     * Queries Odoo for the current status without modifying it.
+     */
+    async _checkStatus() {
+        if (!this._baseUrl) return;
+        const url = `${this._baseUrl}/hr_attendance/employees_infos`;
+        const body = {
+            "id": 3, "jsonrpc": "2.0", "method": "call",
+            "params": { "token": this._token, "limit": 24, "offset": 0, "domain": [] }
+        };
+
+        this._sendRequest(url, body, (json) => {
+            if (json.result && json.result.records) {
+                const emp = json.result.records.find(r => r.id === this._employeeId);
+                if (emp) this._updateCardData(emp);
+            }
+        });
+    }
+
+    /**
+     * Async wrapper for LibSoup requests.
+     * @param {string} url - API Endpoint
+     * @param {object} payload - JSON Body
+     * @param {function} callback - Handler for successful response
+     */
+    async _sendRequest(url, payload, callback) {
+        const message = Soup.Message.new('POST', url);
+        const encoder = new TextEncoder();
+        const bodyBytes = new GLib.Bytes(encoder.encode(JSON.stringify(payload)));
+        
+        message.set_request_body_from_bytes('application/json', bodyBytes);
+        
+        try {
+            const bytes = await this._httpSession.send_and_read_async(message, GLib.PRIORITY_DEFAULT, null);
+            if (message.status_code === 200) {
+                const decoder = new TextDecoder();
+                const json = JSON.parse(decoder.decode(bytes.get_data()));
+                callback(json);
+            }
+        } catch (e) {
+            console.error("Odoo Presence: Network Error", e);
+            this._icon.icon_name = 'network-offline-symbolic';
+        } finally {
+            // Ensure UI consistency after manual actions
+            if (url.includes('manual_selection')) this._checkStatus(); 
         }
     }
 
-    // 6. Actualizamos el icono según el estado
-    // (Esta función ahora sirve para AMBAS respuestas)
-    _updateIcon(state) {
-        if (state === 'checked_in') {
-            this._icon.icon_name = ICON_CHECKED_IN;
+    /**
+     * Updates UI elements and manages the live timer state.
+     */
+    _updateCardData(data) {
+        const isCheckedIn = (data.attendance_state === 'checked_in') || (data.status === 'checked_in');
+        
+        this._icon.icon_name = isCheckedIn ? ICON_CHECKED_IN : ICON_CHECKED_OUT;
+        this._icon.style = isCheckedIn ? 'color: #2ecc71;' : 'color: #e74c3c;';
+
+        this._employeeData.name = data.employee_name || data.display_name || _('Employee');
+        if (data.hours_today !== undefined) {
+            this._employeeData.hoursToday = data.hours_today;
+        }
+        
+        const lastCheck = data.attendance ? data.attendance.check_in : data.last_check_in;
+        if (lastCheck) {
+            this._employeeData.lastCheckIn = new Date(lastCheck.replace(" ", "T") + "Z");
+        }
+
+        this._nameLabel.text = this._employeeData.name;
+        
+        if (isCheckedIn) {
+            this._lastActionLabel.text = _('Check-in: %s').replace('%s', this._formatTime(this._employeeData.lastCheckIn));
+            
+            this._timerLabel.remove_style_class_name('odoo-status-out');
+            this._timerLabel.add_style_class_name('odoo-status-in');
+
+            this._startLiveTimer();
         } else {
-            // 'checked_out' o cualquier error
-            this._icon.icon_name = ICON_CHECKED_OUT;
+            this._lastActionLabel.text = _('Check-out registered');
+            
+            this._timerLabel.remove_style_class_name('odoo-status-in');
+            this._timerLabel.add_style_class_name('odoo-status-out');
+
+            this._stopLiveTimer();
+            this._timerLabel.text = this._formatHours(this._employeeData.hoursToday);
         }
     }
 
-    // Función de limpieza
-    stop() {
-        if (this._httpSession) {
-            this._httpSession.abort();
-            this._httpSession = null;
+    _startLiveTimer() {
+        this._stopLiveTimer();
+        this._updateLiveLabel();
+        this._liveTimerId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => {
+            this._updateLiveLabel();
+            return GLib.SOURCE_CONTINUE;
+        });
+    }
+
+    _stopLiveTimer() {
+        if (this._liveTimerId) {
+            GLib.source_remove(this._liveTimerId);
+            this._liveTimerId = null;
         }
+    }
+
+    _updateLiveLabel() {
+        if (!this._employeeData.lastCheckIn) return;
+        const now = new Date();
+        const diffHours = (now - this._employeeData.lastCheckIn) / (1000 * 60 * 60);
+        this._timerLabel.text = this._formatHours(this._employeeData.hoursToday + diffHours);
+    }
+
+    _formatHours(h) {
+        if (!h) h = 0;
+        const hrs = Math.floor(h);
+        const min = Math.floor((h - hrs) * 60);
+        const sec = Math.floor(((h - hrs) * 60 - min) * 60);
+        return `${hrs.toString().padStart(2,'0')}:${min.toString().padStart(2,'0')}:${sec.toString().padStart(2,'0')}`;
+    }
+
+    _formatTime(d) {
+        return d ? d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '--:--';
+    }
+
+    destroy() {
+        this._stopLiveTimer();
+        if (this._timerId) GLib.source_remove(this._timerId);
+        if (this._settingsChangedId) this._settings.disconnect(this._settingsChangedId);
+        super.destroy();
     }
 });
 
-
-// --- Clase principal de la Extensión ---
 export default class OdooPresenceExtension extends Extension {
     enable() {
-        this._indicator = new OdooIndicator();
+        this.initTranslations('com.perosiledao.OdooPresence');
+        
+        // Retrieve settings object from the extension instance
+        const settings = this.getSettings();
+        
+        // Inject settings into the indicator
+        this._indicator = new OdooIndicator(settings);
+        
         Main.panel.addToStatusArea(this.uuid, this._indicator);
     }
 
     disable() {
-        this._indicator.stop();
-        this._indicator.destroy();
-        this._indicator = null;
+        if (this._indicator) {
+            this._indicator.destroy();
+            this._indicator = null;
+        }
     }
 }

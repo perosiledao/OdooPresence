@@ -1,0 +1,17 @@
+# Archivos compilados de GNOME (se generan al instalar)
+schemas/gschemas.compiled
+locale/*/LC_MESSAGES/*.mo
+
+# Archivos de sistema y temporales
+*~
+*.swp
+.DS_Store
+Thumbs.db
+
+# Empaquetados
+*.zip
+*.tar.gz
+
+# Logs o backups
+*.log
+*.bak

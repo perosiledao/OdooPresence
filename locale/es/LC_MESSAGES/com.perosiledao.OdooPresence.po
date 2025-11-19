@@ -1,0 +1,106 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Presence 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-01-01 12:00+0000\n"
+"PO-Revision-Date: 2025-01-01 12:00+0000\n"
+"Last-Translator: \n"
+"Language-Team: Spanish\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: extension.js
+msgid "Odoo Status"
+msgstr "Estado Odoo"
+
+msgid "Loading..."
+msgstr "Cargando..."
+
+msgid "No data"
+msgstr "Sin datos"
+
+msgid "Waiting for connection..."
+msgstr "Esperando conexión..."
+
+msgid "Employee"
+msgstr "Empleado"
+
+msgid "Check-in: %s"
+msgstr "Entrada: %s"
+
+msgid "Check-out registered"
+msgstr "Salida registrada"
+
+msgid "Unknown"
+msgstr "Desconocido"
+
+# Greetings
+msgid "☀️ Good morning,"
+msgstr "☀️ Buenos días,"
+
+msgid "👋 Good afternoon,"
+msgstr "👋 Buenas tardes,"
+
+msgid "🌙 Good evening,"
+msgstr "🌙 Buenas noches,"
+
+# Notifications
+msgid "✅ Check-in registered at %s.\nHave a nice day!"
+msgstr "✅ Entrada registrada a las %s.\n¡Que tengas un buen día!"
+
+msgid "Great effort today! 🚀"
+msgstr "¡Gran esfuerzo hoy! 🚀"
+
+msgid "Short shift? 👌"
+msgstr "¿Jornada corta? 👌"
+
+msgid "Good job. 👏"
+msgstr "Buen trabajo. 👏"
+
+msgid "🏠 See you soon, %s"
+msgstr "🏠 Hasta pronto, %s"
+
+msgid "You have worked a total of %s today.\n%s"
+msgstr "Has trabajado un total de %s hoy.\n%s"
+
+#: prefs.js
+msgid "Odoo Connection"
+msgstr "Conexión Odoo"
+
+msgid "Configure Kiosk URL and select user."
+msgstr "Configura la URL de Kiosko y selecciona tu usuario."
+
+msgid "Kiosk URL (Full)"
+msgstr "URL Kiosko (Completa)"
+
+msgid "Select Employee"
+msgstr "Seleccionar Empleado"
+
+msgid "Current ID: "
+msgstr "ID actual: "
+
+msgid "Load employee list"
+msgstr "Cargar lista de empleados"
+
+msgid "%d employees loaded."
+msgstr "%d empleados cargados."
+
+msgid "Error: "
+msgstr "Error: "
+
+msgid "Selected ID: "
+msgstr "Seleccionado ID: "
+
+msgid "Security"
+msgstr "Seguridad"
+
+msgid "Employee PIN"
+msgstr "PIN de Empleado"
+
+msgid "Synchronization"
+msgstr "Sincronización"
+
+msgid "Frequency (seconds)"
+msgstr "Frecuencia (segundos)"

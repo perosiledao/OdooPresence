@@ -1,8 +1,17 @@
 {
-  "name": "ODOO presence applet",
-  "description": "Applet que te permite fichar con tu usuario y pin en tu instancia de ODOO",
-  "uuid": "com.kn9491.OdooPresence",
-  "shell-version": [
-    "49"
-  ]
+  "name": "ODOO Presence Monitor",
+  "description": "Check-in/Check-out and presence monitor applet for Odoo using the Kiosk URL",
+  "uuid": "com.perosiledao.OdooPresence",
+  "shell-version": [ "46", "47", "48", "49" ],
+  "issue-tracker": "https://github.com/perosiledao/OdooPresence/issues",
+  "url": "https://github.com/perosiledao/OdooPresence",
+  "author": "Marcos Garcia",
+  "license": "GPL-3.0",
+  "icon": "icon.svg",
+  "session-modes": [
+    "user"
+  ],                                  
+  "settings-schema": "com.perosiledao.OdooPresence",
+  "gettext-domain": "com.perosiledao.OdooPresence",
+  "version": 1
 }
