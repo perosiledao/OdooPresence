@@ -3,7 +3,7 @@ SHELL = /bin/sh
 UUID = com.perosiledao.OdooPresence
 INSTALL_DIR = $(HOME)/.local/share/gnome-shell/extensions/$(UUID)
 
-# Archivos limpios que queremos instalar
+# Archivos base
 SOURCES = extension.js \
           prefs.js \
           metadata.json \
@@ -11,65 +11,43 @@ SOURCES = extension.js \
           icon.svg \
           LICENSE
 
-.PHONY: help install uninstall enable disable prefs zip clean
-
-help:
-	@echo "Commands:"
-	@echo "  install    - Installs the extension (skips translations if gettext is missing)"
-	@echo "  uninstall  - Uninstalls the extension"
-	@echo "  enable     - Enables the extension"
-	@echo "  disable    - Disables the extension"
-	@echo "  prefs      - Opens the extension preferences"
-	@echo "  zip        - Creates a clean zip file for distribution"
+.PHONY: install zip clean
 
 install:
-	@echo "Installing extension..."
+	@echo "🔍 Iniciando instalación..."
 	
-	# 1. Limpiar instalación anterior
+	# 1. Limpiar y crear directorios
 	@rm -rf $(INSTALL_DIR)
-	@mkdir -p $(INSTALL_DIR)
+	@mkdir -p $(INSTALL_DIR)/schemas
+	@mkdir -p $(INSTALL_DIR)/locale/es/LC_MESSAGES
 	
-	# 2. Copiar código fuente limpio
+	# 2. Copiar archivos fuente
+	@echo "📂 Copiando archivos base..."
 	@cp $(SOURCES) $(INSTALL_DIR)
 	
-	# 3. Copiar y compilar Esquemas
-	@mkdir -p $(INSTALL_DIR)/schemas
+	# 3. GESTIÓN DE ESQUEMAS
+	@echo "⚙️  Compilando esquemas..."
 	@cp schemas/*.xml $(INSTALL_DIR)/schemas/
 	@glib-compile-schemas $(INSTALL_DIR)/schemas
 	
-	# 4. Intentar compilar Traducciones (Solo si existe msgfmt)
-	@mkdir -p $(INSTALL_DIR)/locale/es/LC_MESSAGES
-	@if command -v msgfmt >/dev/null 2>&1; then \
-		echo "Translating to Spanish..."; \
+	# 4. TRADUCCIONES (Generar POT y Compilar MO)
+	@if command -v xgettext >/dev/null 2>&1; then \
+		echo "📝 Actualizando plantilla de traducción (.pot)..."; \
+		xgettext --language=JavaScript --keyword=_ --from-code=UTF-8 --output=locale/$(UUID).pot extension.js prefs.js; \
+		\
+		echo "🌍 Compilando traducción al español (.mo)..."; \
 		msgfmt locale/es/LC_MESSAGES/$(UUID).po -o $(INSTALL_DIR)/locale/es/LC_MESSAGES/$(UUID).mo; \
 	else \
-		echo "⚠️  'msgfmt' not found. Skipping translations (English only)."; \
-		echo "   (Install 'gettext' package to enable Spanish)"; \
+		echo "⚠️  Herramientas 'gettext' no encontradas. Saltando traducciones."; \
 	fi
 	
-	@echo "✅ Installation complete. Restart GNOME Shell (Alt+F2, 'r') if needed."
-
-uninstall:
-	@echo "Uninstalling extension..."
-	@rm -rf $(INSTALL_DIR)
-	@echo "Uninstallation complete."
-
-enable:
-	@gnome-extensions enable $(UUID)
-
-disable:
-	@gnome-extensions disable $(UUID)
-
-prefs:
-	@gnome-extensions prefs $(UUID)
+	@echo "✅ Instalación completada."
+	@echo "⚠️  IMPORTANTE: Reinicia GNOME ahora (Alt+F2, pulsa 'r', Enter)."
 
 zip:
-	@echo "Packing extension..."
+	@echo "📦 Creando ZIP..."
 	@rm -f $(UUID).zip
-	@zip -r $(UUID).zip . -x "*.git*" -x "images/*" -x "*.po" -x "*.pot" -x "*.zip" -x ".vscode/*"
-	@echo "📦 Zip created: $(UUID).zip"
+	@zip -r $(UUID).zip . -x "*.git*" -x "images/*" -x "Makefile" -x "*.po" -x "*.pot" -x "*.zip" -x ".vscode/*"
 
 clean:
 	@rm -f $(UUID).zip
-	@rm -f schemas/gschemas.compiled
-	@rm -f locale/es/LC_MESSAGES/*.mo

@@ -104,3 +104,12 @@ msgstr "Sincronización"
 
 msgid "Frequency (seconds)"
 msgstr "Frecuencia (segundos)"
+
+msgid "Are you sure you want to check out?"
+msgstr "¿Estás seguro de que quieres fichar salida?"
+
+msgid "Cancel"
+msgstr "Cancelar"
+
+msgid "Check Out"
+msgstr "Salir"

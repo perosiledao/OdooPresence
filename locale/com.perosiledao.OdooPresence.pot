@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-11-19 13:11+0000\n"
+"POT-Creation-Date: 2025-11-20 09:21+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,71 +17,83 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: extension.js:39
+#: extension.js:35
 msgid "Odoo Status"
 msgstr ""
 
-#: extension.js:52 extension.js:109 prefs.js:75
+#: extension.js:51 extension.js:101 prefs.js:75
 msgid "Loading..."
 msgstr ""
 
-#: extension.js:125
+#: extension.js:117
 msgid "Waiting for connection..."
 msgstr ""
 
-#: extension.js:207
+#: extension.js:189
+msgid "Are you sure you want to check out?"
+msgstr ""
+
+#: extension.js:201
+msgid "Cancel"
+msgstr ""
+
+#: extension.js:206
+msgid "Check Out"
+msgstr ""
+
+#: extension.js:251
 #, javascript-format
 msgid ""
 "✅ Check-in registered at %s.\n"
 "Have a nice day!"
 msgstr ""
 
-#: extension.js:214
+#: extension.js:258
 msgid "Great effort today! 🚀"
 msgstr ""
 
-#: extension.js:215
+#: extension.js:259
 msgid "Short shift? 👌"
 msgstr ""
 
-#: extension.js:216
+#: extension.js:260
 msgid "Good job. 👏"
 msgstr ""
 
-#: extension.js:219
+#: extension.js:263
 #, javascript-format
 msgid "🏠 See you soon, %s"
 msgstr ""
 
-#: extension.js:220
+#: extension.js:264
 #, javascript-format
 msgid ""
 "You have worked a total of %s today.\n"
 "%s"
 msgstr ""
 
-#: extension.js:232
+#: extension.js:271
 msgid "☀️ Good morning,"
 msgstr ""
 
-#: extension.js:233
+#: extension.js:272
 msgid "👋 Good afternoon,"
 msgstr ""
 
-#: extension.js:234
+#: extension.js:273
 msgid "🌙 Good evening,"
 msgstr ""
 
-#: extension.js:299
+#: extension.js:328
 msgid "Employee"
 msgstr ""
 
-#: extension.js:312
+#: extension.js:341
 #, javascript-format
 msgid "Check-in: %s"
 msgstr ""
 
-#: extension.js:319
+#: extension.js:346
 msgid "Check-out registered"
 msgstr ""
 

@@ -7,15 +7,11 @@
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 import { Extension, gettext as _ } from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 import Clutter from 'gi://Clutter';
@@ -31,20 +27,14 @@ const ICON_CHECKED_OUT = 'system-log-out-symbolic';
 
 /**
  * Main indicator button class located in the top panel.
- * Handles the UI rendering, networking state, and user interaction.
  */
 const OdooIndicator = GObject.registerClass(
 class OdooIndicator extends PanelMenu.Button {
     
-    /**
-     * @param {Gio.Settings} settings - The extension settings instance injected from the main class.
-     */
     _init(settings) {
         super._init(0.0, _('Odoo Status'));
 
-        // Store settings reference locally to avoid schema path resolution issues
         this._settings = settings;
-
         this._httpSession = new Soup.Session();
         this._timerId = null;
         this._liveTimerId = null;
@@ -53,6 +43,9 @@ class OdooIndicator extends PanelMenu.Button {
         this._baseUrl = '';
         this._token = '';
         this._pin = '';
+        
+        // Local state tracking for confirmation logic
+        this._isCheckedIn = false; 
         
         this._employeeData = {
             name: _('Loading...'),
@@ -67,7 +60,6 @@ class OdooIndicator extends PanelMenu.Button {
         });
         this.add_child(this._icon);
 
-        // Build the popup menu
         this._buildMenuCard();
 
         // Input Handling
@@ -75,8 +67,8 @@ class OdooIndicator extends PanelMenu.Button {
             if (event.type() === Clutter.EventType.BUTTON_PRESS) {
                 const button = event.get_button();
                 if (button === 1) {
-                    // Left Click: Toggle Status
-                    this._toggleAttendance();
+                    // Left Click: Check state before toggling
+                    this._handleLeftClick();
                     return Clutter.EVENT_STOP;
                 } else if (button === 3) {
                     // Right Click: Open Menu
@@ -87,16 +79,10 @@ class OdooIndicator extends PanelMenu.Button {
             return Clutter.EVENT_PROPAGATE;
         });
 
-        // Listen for configuration changes to reload connection details
         this._settingsChangedId = this._settings.connect('changed', () => this._loadConfigAndStart());
-        
-        // Start polling
         this._loadConfigAndStart();
     }
 
-    /**
-     * Constructs the popup menu layout (Employee Card).
-     */
     _buildMenuCard() {
         this._cardBox = new St.BoxLayout({
             vertical: true,
@@ -139,9 +125,6 @@ class OdooIndicator extends PanelMenu.Button {
         this.menu.addMenuItem(item);
     }
 
-    /**
-     * loads settings from Gio.Settings and initializes the network polling timer.
-     */
     _loadConfigAndStart() {
         const kioskUrl = this._settings.get_string('kiosk-url');
         this._employeeId = this._settings.get_int('employee-id');
@@ -151,7 +134,6 @@ class OdooIndicator extends PanelMenu.Button {
         try {
             if (kioskUrl.includes('/hr_attendance/')) {
                 const parts = kioskUrl.split('/hr_attendance/');
-                // Sanitize URL: remove trailing slashes and locale paths
                 this._baseUrl = parts[0].replace(/\/$/, "").replace('/en', ''); 
                 this._token = parts[1];
             } else {
@@ -162,30 +144,83 @@ class OdooIndicator extends PanelMenu.Button {
             return;
         }
 
-        // Reset network timer
         if (this._timerId) {
             GLib.source_remove(this._timerId);
             this._timerId = null;
         }
-        
         if (this._updateFreq > 0) {
             this._timerId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, this._updateFreq, () => {
                 this._checkStatus();
                 return GLib.SOURCE_CONTINUE;
             });
         }
-        
-        // Perform immediate check
         this._checkStatus();
     }
 
     /**
-     * Executes a check-in or check-out request against the Odoo API.
+     * Logic to decide whether to act immediately or show confirmation.
      */
-    async _toggleAttendance() {
+    _handleLeftClick() {
+        if (this._isCheckedIn) {
+            // If currently working, ask for confirmation before leaving
+            this._showCheckOutDialog();
+        } else {
+            // If entering, just do it
+            this._performToggle();
+        }
+    }
+
+    /**
+     * Displays a native GNOME Shell modal dialog.
+     */
+    _showCheckOutDialog() {
+        const dialog = new ModalDialog.ModalDialog();
+        
+        // Content layout
+        const content = new St.BoxLayout({ vertical: true, style: 'padding: 10px; spacing: 10px;' });
+        
+        const icon = new St.Icon({ 
+            icon_name: 'system-log-out-symbolic', 
+            icon_size: 48, 
+            x_align: Clutter.ActorAlign.CENTER 
+        });
+        
+        const label = new St.Label({ 
+            text: _('Are you sure you want to check out?'),
+            style: 'font-weight: bold; text-align: center;',
+            x_align: Clutter.ActorAlign.CENTER
+        });
+
+        content.add_child(icon);
+        content.add_child(label);
+        dialog.contentLayout.add_child(content);
+
+        // Buttons
+        dialog.setButtons([
+            { 
+                label: _('Cancel'), 
+                action: () => dialog.close(), 
+                key: Clutter.KEY_Escape 
+            },
+            { 
+                label: _('Check Out'), 
+                action: () => {
+                    dialog.close();
+                    this._performToggle(); // Proceed with action
+                },
+                default: true 
+            }
+        ]);
+
+        dialog.open();
+    }
+
+    /**
+     * Executes the actual network request.
+     */
+    async _performToggle() {
         if (!this._baseUrl || this._employeeId === 0) return;
         
-        // Set loading state
         this._icon.icon_name = ICON_LOADING;
         
         const url = `${this._baseUrl}/hr_attendance/manual_selection`;
@@ -197,41 +232,40 @@ class OdooIndicator extends PanelMenu.Button {
         this._sendRequest(url, body, (json) => {
             if (json.result) {
                 this._updateCardData(json.result);
-                
-                // Handle desktop notifications based on response state
-                const state = json.result.attendance_state; 
-                const fullName = json.result.employee_name || "User";
-                const firstName = fullName.split(' ')[0]; 
-                
-                if (state === 'checked_in') {
-                    const greeting = this._getGreeting(); 
-                    const checkInTime = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                    
-                    this._sendNotification(
-                        `${greeting} ${firstName}`,
-                        _('✅ Check-in registered at %s.\nHave a nice day!').replace('%s', checkInTime)
-                    );
-                } else {
-                    const hours = this._formatHours(json.result.hours_today);
-                    const hoursVal = json.result.hours_today;
-                    let extraMsg = "";
-
-                    if (hoursVal > 8) extraMsg = _("Great effort today! 🚀");
-                    else if (hoursVal < 4) extraMsg = _("Short shift? 👌");
-                    else extraMsg = _("Good job. 👏");
-
-                    this._sendNotification(
-                        _('🏠 See you soon, %s').replace('%s', firstName),
-                        _('You have worked a total of %s today.\n%s').replace('%s', hours).replace('%s', extraMsg)
-                    );
-                }
+                this._handleNotification(json.result);
             }
         });
     }
 
-    /**
-     * Returns a localized greeting string based on current hour.
-     */
+    _handleNotification(result) {
+        const state = result.attendance_state; 
+        const fullName = result.employee_name || "User";
+        const firstName = fullName.split(' ')[0]; 
+        
+        if (state === 'checked_in') {
+            const greeting = this._getGreeting(); 
+            const checkInTime = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            
+            Main.notify(
+                `${greeting} ${firstName}`,
+                _('✅ Check-in registered at %s.\nHave a nice day!').replace('%s', checkInTime)
+            );
+        } else {
+            const hours = this._formatHours(result.hours_today);
+            const hoursVal = result.hours_today;
+            let extraMsg = "";
+
+            if (hoursVal > 8) extraMsg = _("Great effort today! 🚀");
+            else if (hoursVal < 4) extraMsg = _("Short shift? 👌");
+            else extraMsg = _("Good job. 👏");
+
+            Main.notify(
+                _('🏠 See you soon, %s').replace('%s', firstName),
+                _('You have worked a total of %s today.\n%s').replace('%s', hours).replace('%s', extraMsg)
+            );
+        }
+    }
+
     _getGreeting() {
         const hour = new Date().getHours();
         if (hour >= 5 && hour < 12) return _("☀️ Good morning,");
@@ -243,9 +277,6 @@ class OdooIndicator extends PanelMenu.Button {
         Main.notify(title, body);
     }
 
-    /**
-     * Queries Odoo for the current status without modifying it.
-     */
     async _checkStatus() {
         if (!this._baseUrl) return;
         const url = `${this._baseUrl}/hr_attendance/employees_infos`;
@@ -262,12 +293,6 @@ class OdooIndicator extends PanelMenu.Button {
         });
     }
 
-    /**
-     * Async wrapper for LibSoup requests.
-     * @param {string} url - API Endpoint
-     * @param {object} payload - JSON Body
-     * @param {function} callback - Handler for successful response
-     */
     async _sendRequest(url, payload, callback) {
         const message = Soup.Message.new('POST', url);
         const encoder = new TextEncoder();
@@ -286,17 +311,17 @@ class OdooIndicator extends PanelMenu.Button {
             console.error("Odoo Presence: Network Error", e);
             this._icon.icon_name = 'network-offline-symbolic';
         } finally {
-            // Ensure UI consistency after manual actions
             if (url.includes('manual_selection')) this._checkStatus(); 
         }
     }
 
-    /**
-     * Updates UI elements and manages the live timer state.
-     */
     _updateCardData(data) {
+        // Determine state from API response
         const isCheckedIn = (data.attendance_state === 'checked_in') || (data.status === 'checked_in');
         
+        // Update local state tracking (CRITICAL for confirmation dialog)
+        this._isCheckedIn = isCheckedIn;
+
         this._icon.icon_name = isCheckedIn ? ICON_CHECKED_IN : ICON_CHECKED_OUT;
         this._icon.style = isCheckedIn ? 'color: #2ecc71;' : 'color: #e74c3c;';
 
@@ -314,17 +339,13 @@ class OdooIndicator extends PanelMenu.Button {
         
         if (isCheckedIn) {
             this._lastActionLabel.text = _('Check-in: %s').replace('%s', this._formatTime(this._employeeData.lastCheckIn));
-            
             this._timerLabel.remove_style_class_name('odoo-status-out');
             this._timerLabel.add_style_class_name('odoo-status-in');
-
             this._startLiveTimer();
         } else {
             this._lastActionLabel.text = _('Check-out registered');
-            
             this._timerLabel.remove_style_class_name('odoo-status-in');
             this._timerLabel.add_style_class_name('odoo-status-out');
-
             this._stopLiveTimer();
             this._timerLabel.text = this._formatHours(this._employeeData.hoursToday);
         }
@@ -376,13 +397,8 @@ class OdooIndicator extends PanelMenu.Button {
 export default class OdooPresenceExtension extends Extension {
     enable() {
         this.initTranslations('com.perosiledao.OdooPresence');
-        
-        // Retrieve settings object from the extension instance
         const settings = this.getSettings();
-        
-        // Inject settings into the indicator
         this._indicator = new OdooIndicator(settings);
-        
         Main.panel.addToStatusArea(this.uuid, this._indicator);
     }
 
