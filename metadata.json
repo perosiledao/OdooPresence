@@ -1,17 +1,19 @@
 {
   "name": "ODOO Presence Monitor",
-  "description": "Check-in/Check-out and presence monitor applet for Odoo using the Kiosk URL",
-  "uuid": "com.perosiledao.OdooPresence",
-  "shell-version": [ "46", "47", "48", "49" ],
-  "issue-tracker": "https://github.com/perosiledao/OdooPresence/issues",
+  "description": "Monitor de estado para Odoo HR usando URL de Kiosko",
+  "uuid": "odoo-presence@perosiledao.com",
+  "shell-version": [
+    "45",
+    "46",
+    "47",
+    "48",
+    "49"
+  ],
   "url": "https://github.com/perosiledao/OdooPresence",
   "author": "Marcos Garcia",
   "license": "GPL-3.0",
   "icon": "icon.svg",
-  "session-modes": [
-    "user"
-  ],                                  
-  "settings-schema": "com.perosiledao.OdooPresence",
-  "gettext-domain": "com.perosiledao.OdooPresence",
-  "version": 1
+  "settings-schema": "org.gnome.shell.extensions.odoo-presence",
+  "gettext-domain": "org.gnome.shell.extensions.odoo-presence",
+  "version": 2
 }

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<schemalist gettext-domain="com.perosiledao.OdooPresence">
-  <schema id="com.perosiledao.OdooPresence" path="/com/perosiledao/OdooPresence/">
+<schemalist gettext-domain="org.gnome.shell.extensions.odoo-presence">
+  <schema id="org.gnome.shell.extensions.odoo-presence" path="/org/gnome/shell/extensions/odoo-presence/">
     
     <key name="kiosk-url" type="s">
       <default>""</default>

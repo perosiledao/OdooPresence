@@ -23,8 +23,7 @@ import { ExtensionPreferences, gettext as _ } from 'resource:///org/gnome/Shell/
 
 export default class OdooPresencePreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
-        this.initTranslations('com.perosiledao.OdooPresence');
-        
+        this.initTranslations('org.gnome.shell.extensions.odoo-presence');        
         const settings = this.getSettings();
         const page = new Adw.PreferencesPage();
         window.add(page);

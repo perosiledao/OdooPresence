@@ -396,7 +396,9 @@ class OdooIndicator extends PanelMenu.Button {
 
 export default class OdooPresenceExtension extends Extension {
     enable() {
-        this.initTranslations('com.perosiledao.OdooPresence');
+        
+        this.initTranslations('org.gnome.shell.extensions.odoo-presence');
+        
         const settings = this.getSettings();
         this._indicator = new OdooIndicator(settings);
         Main.panel.addToStatusArea(this.uuid, this._indicator);

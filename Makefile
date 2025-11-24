@@ -1,6 +1,6 @@
 SHELL = /bin/sh
 
-UUID = com.perosiledao.OdooPresence
+UUID = odoo-presence@perosiledao.com
 INSTALL_DIR = $(HOME)/.local/share/gnome-shell/extensions/$(UUID)
 
 # Archivos base
